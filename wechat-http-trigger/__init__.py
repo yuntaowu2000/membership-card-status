@@ -26,16 +26,15 @@ collection_name = db_data["collection_name"]
 client = pymongo.MongoClient(db_data["cosmos_conn_str"])
 collection = client[db_name][collection_name]
 
-def send_notification_email(subject, content, files: list=None):
+def send_notification_email(subject, content, files: dict={}):
     msg = MIMEMultipart()
     msg["Subject"] = subject
     msg["From"] = email_data["user"]
     msg.attach(MIMEText(content, "plain"))
 
-    for f in files or []:
-        with open(f, "rb") as fil:
-            part = MIMEApplication(fil.read(), Name=os.path.basename(f))
-        part["Content-Disposition"] = f"""attachment; filename="{os.path.basename(f)}" """
+    for f in files:
+        part = MIMEApplication(files[f], Name=f)
+        part["Content-Disposition"] = f"""attachment; filename="{f}" """
         msg.attach(part)
 
     server.sendmail(email_data["user"], email_data["to"], msg.as_string())
@@ -65,8 +64,8 @@ def generate_all_user_df():
     # mongo's internal id is not needed
     df.pop("_id")
     out_fn = "membership_card.csv"
-    df.to_csv(out_fn, index=False)
-    return out_fn
+    csv_content = df.to_csv(index=False)
+    return {out_fn: csv_content}
 
 def card_received_by_user(xml_tree):
     '''领取事件推送'''
@@ -94,8 +93,8 @@ def card_received_by_user(xml_tree):
     result = collection.update_one({"open_id": from_username}, {"$set": new_user_dict}, upsert=True)
     logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
 
-    out_fn = generate_all_user_df()
-    send_notification_email("新用户领取会员卡", f"New membership card created: {json.dumps(new_user_dict)}", [out_fn])
+    df_dict = generate_all_user_df()
+    send_notification_email("新用户领取会员卡", f"New membership card created: {json.dumps(new_user_dict)}", df_dict)
 
 def card_sku_remind(xml_tree):
     '''库存报警事件，基本用不到'''
