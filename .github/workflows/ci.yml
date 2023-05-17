@@ -2,9 +2,9 @@ name: Deploy Python project to function app
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 env:
@@ -33,6 +33,7 @@ jobs:
         popd
     - name: write email/db config to json
       run: |
+        mkdir .jsonfiles
         touch .jsonfiles/email.json
         echo "${{secrets.EMAIL_DATA}}" >> .jsonfiles/email.json
         touch .jsonfiles/database.json
