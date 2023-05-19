@@ -37,3 +37,23 @@
   - 记录settings-connection strings中的PRIMARY CONNECTION STRING，用于代码中的DB连接
   - Data Explorer中可看到所有的data
     - 选择一个collection，settings中可以设置index，我们可以将用户的open_id也设置为一个single field的index
+
+### 本地/Githubupload配置
+
+App本地测试运行以及通过vscode上传至Azure时默认两个文件存在：
+- `.jsonfiles/email.json`
+  - JSON dictionary 记录以下field：
+  - `"server"`：email的SMTP服务器
+  - `"user"`：发送邮件的邮箱，需要能通过server的验证
+  - `"key"`：邮箱对应的密码，建议用没有2FA或OAUTH的SMTP提供商如purelymail
+  - `"to"`：一个收件人的list（有哪些人需要接收到这里所有的相关信息）
+- `.jsonfiles/database.json`
+  - JSON dictionary 记录以下field：
+  - `"cosmos_conn_str"`：Azure cosmos的链接，即为settings-connection strings中的PRIMARY CONNECTION STRING
+  - `"db_name"`：需要使用的mongodb的database名字
+  - `"collection_name"`：database下需要使用的collection的名字
+
+使用Github CI上传至Azure时默认三个Action secret存在：
+- `EMAIL_DATA`：`.jsonfiles/email.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
+- `DB_DATA`：`.jsonfiles/database.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
+- `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`：Function App的Overview中可以点击`Get publish profile`获取`membership-card-status.PublishSettings`文件，将文件内容直接复制进secret即可。

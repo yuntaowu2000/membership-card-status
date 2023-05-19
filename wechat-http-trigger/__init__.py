@@ -9,6 +9,7 @@ import azure.functions as func
 from datetime import date
 import pymongo
 import time
+import hashlib
 
 # make sure the required data are properly set up, because the errors here won't be notified through email
 with open(".jsonfiles/email.json", "r") as f:
@@ -107,7 +108,7 @@ def card_sku_remind(xml_tree):
 
     send_notification_email("会员卡库存警告", f"{card_id} 库存警告，{detail}")
 
-def router(event_type, xml_tree):
+def post_request_router(event_type, xml_tree):
     if event_type == "card_pass_check":
         card_pass_handler(xml_tree)
     elif event_type == "card_not_pass_check":
@@ -117,9 +118,7 @@ def router(event_type, xml_tree):
     elif event_type == "card_sku_remind":
         card_sku_remind(xml_tree)
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request.')
-    logging.info(req.method)
+def handle_post_requests(req: func.HttpRequest):
     start_time = time.time()
     try:
         body = req.get_body()
@@ -128,7 +127,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         msg_type = tree.find(".//MsgType").text.strip()
         assert msg_type == "event", "Message type is not an event."
         event_type = tree.find(".//Event").text.strip()
-        router(event_type, tree)
+        post_request_router(event_type, tree)
     except Exception as e:
         logging.info(e)
         send_notification_email("Error: Wechat API backend", f"An error occured while processing wechat request: {e}\n Request body: {body}")
@@ -142,3 +141,54 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         f"This HTTP triggered function executed successfully.\n Request body: {body}",
         status_code=200
     )
+
+def handle_get_requests(req: func.HttpRequest):
+    '''for initial signature check'''
+    signature = str(req.params["signature"])
+    timestamp = str(req.params["timestamp"])
+    nonce = str(req.params["nonce"])
+    echostr = str(req.params["echostr"])
+
+    # 将token、timestamp、nonce三个参数进行字典序排序
+    token = "UTCGA" # we define this
+    arr = [token, timestamp, nonce]
+    arr.sort()
+    # 将三个参数字符串拼接成一个字符串进行sha1加密
+    tmp_str = "".join(arr)
+    sha1 = hashlib.sha1()
+    sha1.update(tmp_str.encode("utf-8"))
+    tmp_str = sha1.hexdigest()
+    # 开发者获得加密后的字符串可与signature对比，标识该请求来源于微信
+
+    if tmp_str == signature:
+        send_notification_email("微信接入验证成功", json.dumps({
+            "signature": signature,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "echostr": echostr,
+        }))
+        return func.HttpResponse(
+            echostr,
+            status_code=200
+        )
+    else:
+        # 验证失败
+        send_notification_email("微信接入验证失败", json.dumps({
+            "signature": signature,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "echostr": echostr,
+        }))
+        return func.HttpResponse(
+            "",
+            status_code=200
+        )
+
+def main(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request.')
+    logging.info(req.method)
+    
+    if req.method == "POST":
+        return handle_post_requests(req)
+    elif req.method == "GET":
+        return handle_get_requests(req)
