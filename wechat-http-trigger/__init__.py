@@ -1,45 +1,12 @@
-import logging, os, json
-import pandas as pd
-from smtplib import SMTP_SSL as SMTP
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from lxml import etree
+import logging, json
 import azure.functions as func
+import pandas as pd
+from lxml import etree
 from datetime import date
-import pymongo
 import time
 import hashlib
-
-# make sure the required data are properly set up, because the errors here won't be notified through email
-with open(".jsonfiles/email.json", "r") as f:
-    email_data = json.loads(f.read())
-try:
-    server = SMTP(email_data["server"], 587)
-except:
-    server = SMTP(email_data["server"], 465)
-server.login(email_data["user"], email_data["key"])
-
-with open(".jsonfiles/database.json", "r") as f:
-    db_data = json.loads(f.read())
-db_name = db_data["db_name"]
-collection_name = db_data["collection_name"]
-client = pymongo.MongoClient(db_data["cosmos_conn_str"])
-collection = client[db_name][collection_name]
-
-def send_notification_email(subject, content, files: dict={}):
-    msg = MIMEMultipart()
-    msg["Subject"] = subject
-    msg["From"] = email_data["user"]
-    msg.attach(MIMEText(content, "plain"))
-
-    for f in files:
-        part = MIMEApplication(files[f], Name=f)
-        part["Content-Disposition"] = f"""attachment; filename="{f}" """
-        msg.attach(part)
-
-    server.sendmail(email_data["user"], email_data["to"], msg.as_string())
-    logging.info(f"Email sent: {content}")
+import requests
+from api_consts import *
 
 def card_pass_handler(xml_tree):
     '''审核通过'''
@@ -57,16 +24,6 @@ def card_not_pass_handler(xml_tree):
         xml_tree_str = etree.tostring(xml_tree, encoding="utf-8", method="xml")
         content = f"{card_id} 审核未通过，原因未知，{xml_tree_str}。"
     send_notification_email("会员卡审核结果", content)
-
-def generate_all_user_df():
-    '''Get all user info from database, convert to csv'''
-    mongo_docs = collection.find({})
-    df = pd.DataFrame(mongo_docs)
-    # mongo's internal id is not needed
-    df.pop("_id")
-    out_fn = "membership_card.csv"
-    csv_content = df.to_csv(index=False)
-    return {out_fn: csv_content}
 
 def card_received_by_user(xml_tree):
     '''领取事件推送'''
@@ -91,11 +48,75 @@ def card_received_by_user(xml_tree):
         "user_code": user_card_code,
         "received_time": time,
     }
-    result = collection.update_one({"open_id": from_username}, {"$set": new_user_dict}, upsert=True)
-    logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
+    # result = collection.update_one({"open_id": from_username}, {"$set": new_user_dict}, upsert=True)
+    # logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
 
-    df_dict = generate_all_user_df()
-    send_notification_email("新用户领取会员卡", f"New membership card created: {json.dumps(new_user_dict)}", df_dict)
+    # df_dict = generate_all_user_df()
+    send_notification_email("新用户领取会员卡", f"New membership card created:\n{json.dumps(new_user_dict, indent=True)}")
+
+def membercard_user_info(xml_tree):
+    '''
+        用户填写、提交资料后的事件。将会通过card_id和user card code获得会员信息
+        Unused: check membercard_user_info in activate.
+    '''
+    # 会员卡卡券的unique id
+    card_id = xml_tree.find(".//CardId").text.strip()
+    # 用户的code序列号
+    user_card_code = xml_tree.find(".//UserCardCode").text.strip()
+
+    # 获取access token，时效通常为2小时，剩余时效记录在res["expires_in"]中。
+    res = requests.get(f"{wechat_api}/cgi-bin/token?grant_type=client_credential&appid={wechat_app_id}&secret={wechat_app_secret}").json()
+    access_token = res["access_token"]
+
+    # 获取会员信息
+    card_info_json = {
+        "card_id": card_id,
+        "code": user_card_code
+    }
+    res = requests.post(f"{wechat_api}/card/membercard/userinfo/get?access_token={access_token}", json=card_info_json).json()
+    if res["errcode"] != 0:
+        errmsg = res["errmsg"]
+        send_notification_email("获取用户信息失败", f"错误消息：{errmsg}\n会员卡对应信息：{json.dumps(card_info_json, indent=True)}")
+        return
+    
+    try:
+        receive_time = date.today().isoformat()
+        open_id = res["openid"]
+        user_info_dict = {
+            "card_id": card_id,
+            "open_id": open_id,
+            "user_code": user_card_code,
+            "received_time": receive_time,
+            "nickname": res["nickname"],
+            "card_status": res["user_card_status"],
+            "card_active": False,
+        }
+
+        user_info = res["user_info"]
+        for values in user_info["common_field_list"]:
+            if values["name"] == "USER_FORM_INFO_FLAG_NAME":
+                user_info_dict["name"] = values["value"]
+            if values["name"] == "USER_FORM_INFO_FLAG_EMAIL":
+                user_info_dict["email"] = values["value"]
+        for values in user_info["custom_field_list"]:
+            if values["name"] == "WECHAT_ID":
+                user_info_dict["wechat_id"] = values["value"]
+        
+        result = collection.update_one({"open_id": open_id}, {"$set": user_info_dict}, upsert=True)
+        logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
+
+        for k in user_info_dict:
+            user_info_dict[k] = [user_info_dict[k]]
+        df = pd.DataFrame(user_info_dict)
+        out_fn = "new_member.csv"
+        csv_content = df.to_csv(index=False)
+        df_dict = {out_fn: csv_content}
+        
+        link_agree = f"{activate_api}?activate=1&code={user_card_code}&card_id={card_id}"
+        link_disagree = f"{activate_api}?activate=0&code={user_card_code}&card_id={card_id}"
+        send_notification_email("新会员审核", f"请阅读{out_fn}，并决定是否同意激活该会员卡。\n同意：\n{link_agree}\n\n不同意：\n{link_disagree}", df_dict)
+    except Exception as e:
+        send_notification_email("获取用户信息失败", f"Error: {e}\nData: {json.dumps(res, indent=True)}")
 
 def card_sku_remind(xml_tree):
     '''库存报警事件，基本用不到'''
@@ -117,6 +138,8 @@ def post_request_router(event_type, xml_tree):
         card_received_by_user(xml_tree)
     elif event_type == "card_sku_remind":
         card_sku_remind(xml_tree)
+    elif event_type == "submit_membercard_user_info":
+        membercard_user_info(xml_tree)
 
 def handle_post_requests(req: func.HttpRequest):
     start_time = time.time()
@@ -166,7 +189,7 @@ def handle_get_requests(req: func.HttpRequest):
             "timestamp": timestamp,
             "nonce": nonce,
             "echostr": echostr,
-        }))
+        }, indent=True))
         return func.HttpResponse(
             echostr,
             status_code=200
@@ -178,7 +201,7 @@ def handle_get_requests(req: func.HttpRequest):
             "timestamp": timestamp,
             "nonce": nonce,
             "echostr": echostr,
-        }))
+        }, indent=True))
         return func.HttpResponse(
             "",
             status_code=200

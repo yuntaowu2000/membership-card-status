@@ -38,6 +38,10 @@ jobs:
         echo "${{secrets.EMAIL_DATA}}" >> .jsonfiles/email.json
         touch .jsonfiles/database.json
         echo "${{secrets.DB_DATA}}" >> .jsonfiles/database.json
+        touch .jsonfiles/wechat.json
+        echo "${{secrets.WECHAT_DATA}}" >> .jsonfiles/wechat.json
+        touch .jsonfiles/base_urls.json
+        echo "${{secrets.BASE_URLS}}" >> .jsonfiles/base_urls.json
     - name: 'Run Azure Functions action'
       uses: Azure/functions-action@v1
       with:
