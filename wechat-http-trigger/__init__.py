@@ -1,6 +1,5 @@
 import logging, json
 import azure.functions as func
-import pandas as pd
 from lxml import etree
 from datetime import date
 import time
@@ -45,14 +44,12 @@ def card_received_by_user(xml_tree):
     new_user_dict = {
         "card_id": card_id,
         "open_id": from_username,
-        "user_code": user_card_code,
+        "card_code": user_card_code,
+        "card_active": False,
         "received_time": time,
     }
-    # result = collection.update_one({"open_id": from_username}, {"$set": new_user_dict}, upsert=True)
-    # logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
-
-    # df_dict = generate_all_user_df()
-    send_notification_email("新用户领取会员卡", f"New membership card created:\n{json.dumps(new_user_dict, indent=True)}")
+    result = collection.update_one({"card_code": user_card_code}, {"$set": new_user_dict}, upsert=True)
+    logging.info(f"New user card created, upserted document with _id {result.upserted_id}\n")
 
 def membercard_user_info(xml_tree):
     '''
@@ -85,7 +82,7 @@ def membercard_user_info(xml_tree):
         user_info_dict = {
             "card_id": card_id,
             "open_id": open_id,
-            "user_code": user_card_code,
+            "card_code": user_card_code,
             "received_time": receive_time,
             "nickname": res["nickname"],
             "card_status": res["user_card_status"],
@@ -102,19 +99,12 @@ def membercard_user_info(xml_tree):
             if values["name"] == "WECHAT_ID":
                 user_info_dict["wechat_id"] = values["value"]
         
-        result = collection.update_one({"open_id": open_id}, {"$set": user_info_dict}, upsert=True)
+        result = collection.update_one({"card_code": user_card_code}, {"$set": user_info_dict}, upsert=True)
         logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
-
-        for k in user_info_dict:
-            user_info_dict[k] = [user_info_dict[k]]
-        df = pd.DataFrame(user_info_dict)
-        out_fn = "new_member.csv"
-        csv_content = df.to_csv(index=False)
-        df_dict = {out_fn: csv_content}
         
         link_agree = f"{activate_api}?activate=1&code={user_card_code}&card_id={card_id}"
         link_disagree = f"{activate_api}?activate=0&code={user_card_code}&card_id={card_id}"
-        send_notification_email("新会员审核", f"请阅读{out_fn}，并决定是否同意激活该会员卡。\n同意：\n{link_agree}\n\n不同意：\n{link_disagree}", df_dict)
+        send_notification_email("新会员审核", f"{json.dumps(user_info_dict)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意：\n{link_agree}\n\n不同意：\n{link_disagree}")
     except Exception as e:
         send_notification_email("获取用户信息失败", f"Error: {e}\nData: {json.dumps(res, indent=True)}")
 
@@ -204,7 +194,7 @@ def handle_get_requests(req: func.HttpRequest):
         }, indent=True))
         return func.HttpResponse(
             "",
-            status_code=200
+            status_code=500
         )
 
 def main(req: func.HttpRequest) -> func.HttpResponse:

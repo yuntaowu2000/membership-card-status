@@ -71,8 +71,8 @@ App本地测试运行以及通过vscode上传至Azure时默认4个文件存在�
 ## life cycle
 - 向微信服务器发送create card requests后，会接到`wechat-http-trigger/card_pass_check`或`wechat-http-trigger/card_not_pass_check`，将会向to的收件人发送相关信息
 - 审核通过，即可创建QRcode让用户领取
-- 用户扫码领卡后，会trigger `wechat-http-trigger/card_received_by_user`，发送第一封与user相关的邮件，标题为：新用户领取会员卡，内容为用户领卡的简易信息。
-- 当用户尝试激活会员卡，并提交相关信息后，微信前端会自动跳转页面，将信息以get request的方式发送至`activate`节点，trigger `activate/membercard_user_info`，如果激活失败，客服及用户均会接收到Error相关的信息。如果激活成功，会发送邮件，标题为：新会员审核，其中会有一份csv文件，包含当前用户的所有信息。并有同意及不同意两个链接
+- 用户扫码领卡后，会trigger `wechat-http-trigger/card_received_by_user`，DB记录用户领卡的简易信息。
+- 当用户尝试激活会员卡，并提交相关信息后，微信前端会自动跳转页面，将信息以get request的方式发送至`activate`节点，trigger `activate/membercard_user_info`，如果提交失败，客服及用户均会接收到Error相关的信息。如果提交成功，会发送邮件，标题为：新会员审核，其中会有一份csv文件，包含当前用户的所有信息。并有同意及不同意两个链接
   - 当客服点击同意后，用户的card成功activate，用户可以见到自己的card code，客服会收到邮件，标题为：新用户激活成功，其中有一份csv文件，包含所有激活成功或失败的用户，其中card_active列，如果为True，即为成功激活有效的card，如果为False，即为无效的card
     - 如果激活失败，则邮件标题为：新用户激活失败，邮件内容为相关error message
   - 当客服点击不同意后，不会有任何更新
