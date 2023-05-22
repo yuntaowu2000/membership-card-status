@@ -48,7 +48,7 @@ def handle_post_requests(req: func.HttpRequest):
         info = json.loads(body)
         code = info["code"]
         user_doc = collection.find_one({"card_code": code})
-        if user_doc is not None:
+        if user_doc is not None and user_doc["card_active"]:
             reply_body = extend_user_card(user_doc)
             return func.HttpResponse(json.dumps(json.loads(reply_body)), status_code=200)
         else:

@@ -2,15 +2,27 @@ from datetime import date
 import azure.functions as func
 from api_consts import *
 import pandas as pd
+from pymongo import UpdateOne
 
 def main(mytimer: func.TimerRequest) -> None:
+    '''
+        Automatically deactivate any card that has days_to_deactivate <= 0. 
+        Send reminders to card that has 0<days_to_deactivate<=21.
+    '''
     result = collection.find({})
     df = pd.DataFrame(result)
     df = df.dropna()
     df["days_to_deactivate"] = df["deactivate_date"].apply(lambda x: (date.fromisoformat(str(x))- date.today()).days)
 
-    df_to_remind = df[df["days_to_deactivate"] <= 21]
+    df_to_deactivate = df[(df["days_to_deactivate"] <= 0) & (df["card_active"] == True)]
+    if len(df_to_deactivate) > 0:
+        updates = []
+        for code in df_to_deactivate["card_code"].values:
+            updates.append(UpdateOne({"card_code": code}, {'$set': {"card_active": False}}))
+        result = collection.bulk_write(updates)
+        logging.info(f"Deactivated {result.modified_count} cards")
 
+    df_to_remind = df[(df["days_to_deactivate"] > 0) & (df["days_to_deactivate"] <= 21)]
     for i in range(len(df_to_remind)):
         user_name = df_to_remind["name"].values[i]
         user_code = int(df_to_remind["card_code"].values[i])
