@@ -25,7 +25,7 @@ def activate_user_card(card_id, user_card_code):
     res = requests.post(f"{wechat_api}/card/membercard/activate?access_token={access_token}", json=card_info_json).json()
 
     if res["errcode"] != 0:
-        send_notification_email("新用户激活失败", res["errmsg"])
+        msg = {"msg": f"""新用户激活失败. {res["errmsg"]}"""}
     else:  
         set_dict = {
             "card_active": True,
@@ -36,6 +36,8 @@ def activate_user_card(card_id, user_card_code):
         logging.info(f"User card status updated, upserted document with _id {result.upserted_id}\n")
         df_dict = generate_all_user_df(filter={})
         send_notification_email("新用户激活成功", f"新用户卡号：{json.dumps(card_info_json, indent=True)}。csv文件包含全会员卡数据。", df_dict)
+        msg = {"msg": f"This HTTP triggered function executed successfully.\nUser card {user_card_code} for {card_id} is activated."}
+    return msg
 
 def handle_post_requests(req: func.HttpRequest):
     try:
@@ -45,8 +47,7 @@ def handle_post_requests(req: func.HttpRequest):
         user_doc = collection.find_one({"card_code": code})
         if user_doc is not None:
             card_id = user_doc["card_id"]
-            activate_user_card(card_id, code)
-            msg = {"msg": f"This HTTP triggered function executed successfully.\nUser card {code} for {card_id} is activated."}
+            msg = activate_user_card(card_id, code)
             reply_body = json.dumps({"data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
             return func.HttpResponse(json.dumps(json.loads(reply_body)), status_code=200)
         else:
@@ -138,9 +139,9 @@ def handle_get_requests(req: func.HttpRequest):
     user_card_code = str(req.params["code"])
     card_id = str(req.params["card_id"])
     if activate == 1:
-        activate_user_card(card_id, user_card_code)
+        msg = activate_user_card(card_id, user_card_code)
         return func.HttpResponse(
-            f"This HTTP triggered function executed successfully.\n{user_card_code} 激活成功",
+            f"This HTTP triggered function executed successfully.\n{msg}",
             status_code=200
         )
     else:
