@@ -4,7 +4,15 @@ from datetime import date, timedelta
 import requests
 from api_consts import *
 
-def activate_user_card(card_id, user_card_code):
+def activate_user_card(user_doc):
+    card_id = user_doc["card_id"]
+    user_card_code = user_doc["card_code"]
+
+    if "activate_date" in user_doc:
+        msg = {"msg": f"Card {user_card_code} has already been activated."}
+        reply_body = json.dumps({"err_code": -1, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
+        return reply_body
+
     # 获取access token，时效通常为2小时，剩余时效记录在res["expires_in"]中。
     res = requests.get(f"{wechat_api}/cgi-bin/token?grant_type=client_credential&appid={wechat_app_id}&secret={wechat_app_secret}").json()
     access_token = res["access_token"]
@@ -25,7 +33,8 @@ def activate_user_card(card_id, user_card_code):
     res = requests.post(f"{wechat_api}/card/membercard/activate?access_token={access_token}", json=card_info_json).json()
 
     if res["errcode"] != 0:
-        msg = {"msg": f"""新用户激活失败. {res["errmsg"]}"""}
+        msg = {"msg": f"""Activation error. {res["errmsg"]}"""}
+        reply_body = json.dumps({"err_code": -1, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
     else:  
         set_dict = {
             "card_active": True,
@@ -36,8 +45,9 @@ def activate_user_card(card_id, user_card_code):
         logging.info(f"User card status updated, upserted document with _id {result.upserted_id}\n")
         df_dict = generate_all_user_df(filter={})
         send_notification_email("新用户激活成功", f"新用户卡号：{json.dumps(card_info_json, indent=True)}。csv文件包含全会员卡数据。", df_dict)
-        msg = {"msg": f"This HTTP triggered function executed successfully.\nUser card {user_card_code} for {card_id} is activated."}
-    return msg
+        msg = {"msg": f"Card {user_card_code} is activated."}
+        reply_body = json.dumps({"err_code": 0, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
+    return reply_body
 
 def handle_post_requests(req: func.HttpRequest):
     try:
@@ -46,18 +56,16 @@ def handle_post_requests(req: func.HttpRequest):
         code = info["code"]
         user_doc = collection.find_one({"card_code": code})
         if user_doc is not None:
-            card_id = user_doc["card_id"]
-            msg = activate_user_card(card_id, code)
-            reply_body = json.dumps({"data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
-            return func.HttpResponse(json.dumps(json.loads(reply_body)), status_code=200)
+            reply_body = activate_user_card(user_doc)
+            return func.HttpResponse(reply_body, status_code=200)
         else:
-            msg = {"msg": f"This HTTP triggered function executed successfully.\nBut there is no user card {code}."}
-            reply_body = json.dumps({"data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
-            return func.HttpResponse(json.dumps(json.loads(reply_body)), status_code=400)
+            msg = {"msg": f"There is no card {code}."}
+            reply_body = json.dumps({"err_code": -1, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
+            return func.HttpResponse(reply_body, status_code=400)
     except Exception as e:
-        msg = {"msg": f"This HTTP triggered function failed.\nError: {e}"}
-        reply_body = json.dumps({"data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
-        return func.HttpResponse(json.dumps(json.loads(reply_body)), status_code=500)
+        msg = {"msg": f"Error: {e}"}
+        reply_body = json.dumps({"err_code": -1, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
+        return func.HttpResponse(reply_body, status_code=500)
 
 def membercard_user_info(req: func.HttpRequest):
     '''
@@ -139,7 +147,8 @@ def handle_get_requests(req: func.HttpRequest):
     user_card_code = str(req.params["code"])
     card_id = str(req.params["card_id"])
     if activate == 1:
-        msg = activate_user_card(card_id, user_card_code)
+        user_doc = collection.find_one({"card_code": user_card_code})
+        msg = activate_user_card(user_doc)
         return func.HttpResponse(
             f"This HTTP triggered function executed successfully.\n{msg}",
             status_code=200
