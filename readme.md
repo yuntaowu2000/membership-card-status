@@ -75,11 +75,13 @@ App本地测试运行以及通过vscode上传至Azure时默认4个文件存在�
 - 用户扫码领卡后，会trigger `wechat-http-trigger/card_received_by_user`，DB记录用户领卡的简易信息。
 - 当用户尝试激活会员卡，并提交相关信息后，微信前端会自动跳转页面，将信息以get request的方式发送至`activate`节点，trigger `activate/membercard_user_info`，如果提交失败，客服及用户均会接收到Error相关的信息。如果提交成功，会发送邮件，标题为：新会员审核，其中会有一份csv文件，包含当前用户的所有信息。并有同意及不同意两个链接
   - 当客服点击同意后，用户的card成功activate，用户可以见到自己的card code，客服会收到邮件，标题为：新用户激活成功，其中有一份csv文件，包含所有激活成功或失败的用户，其中card_active列，如果为True，即为成功激活有效的card，如果为False，即为无效的card
-    - 如果激活失败，则邮件标题为：新用户激活失败，邮件内容为相关error message
+    - 如果激活失败，则激活页面会提示错误信息
   - 当客服点击不同意后，不会有任何更新
+  - 已激活的card不会被再次激活，会直接触发error
 - 客服也可以通过微信小程序向`activate`节点发送POST request，body需要为{"code": 用户的code}，后续过程与点击同意链接相同
 - scheduler每周会trigger `reminder`节点，检查用户会员卡的时效，当用户的会员卡临近过期时（3周内），会向对应用户的邮箱发送提醒邮件。
   - `reminder/function.json`中可设置schedule，`0 0 0 * * 5`意为每周五0：00：00时检查并发送邮件。
-- 当用户续费时，客户可以通过微信小程序向`extend`节点发送POST request，body需要为{"code": 用户的code}。
+- 当用户续费时，客户可以通过微信小程序向`renew`节点发送POST request，body需要为{"code": 用户的code}。
   - 如果成功，客服微信会收到用户会员卡的新有效期的数据，Email会受到一份更新后的全员数据。
   - 如果失败，客服微信会收到相关Error信息。基本是用户card code无效了，需要重新使用QR code让用户领取新卡，并重新activate
+  - 如果用户的card有效期还剩30天以上，则renew会触发error
