@@ -102,9 +102,8 @@ def membercard_user_info(xml_tree):
         result = collection.update_one({"card_code": user_card_code}, {"$set": user_info_dict}, upsert=True)
         logging.info(f"New user created, upserted document with _id {result.upserted_id}\n")
         
-        link_agree = f"{activate_api}?activate=1&code={user_card_code}&card_id={card_id}"
-        link_disagree = f"{activate_api}?activate=0&code={user_card_code}&card_id={card_id}"
-        send_notification_email("新会员审核", f"{json.dumps(user_info_dict)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意：\n{link_agree}\n\n不同意：\n{link_disagree}")
+        link_agree = f"{activate_api}?code={user_card_code}"
+        send_notification_email("新会员审核", f"{json.dumps(user_info_dict, indent=True)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意请点击以下链接：\n{link_agree}\n")
     except Exception as e:
         send_notification_email("获取用户信息失败", f"Error: {e}\nData: {json.dumps(res, indent=True)}")
 

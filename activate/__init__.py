@@ -70,7 +70,6 @@ def handle_post_requests(req: func.HttpRequest):
 def membercard_user_info(req: func.HttpRequest):
     '''
         用户填写、提交资料后，跳转页面时的事件。将会通过req parameters获得会员信息
-        Unused: check membercard_user_info in activate.
     '''
     card_id = str(req.params["card_id"])
     encrypt_code = str(req.params["encrypt_code"])
@@ -131,9 +130,8 @@ def membercard_user_info(req: func.HttpRequest):
     result = collection.update_one({"card_code": user_card_code}, {"$set": user_info_dict}, upsert=True)
     logging.info(f"User info submitted, upserted document with _id {result.upserted_id}\n")
 
-    link_agree = f"{activate_api}?activate=1&code={user_card_code}&card_id={card_id}"
-    link_disagree = f"{activate_api}?activate=0&code={user_card_code}&card_id={card_id}"
-    send_notification_email("新会员审核", f"{json.dumps(user_info_dict, indent=True)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意：\n{link_agree}\n\n不同意：\n{link_disagree}")
+    link_agree = f"{activate_api}?code={user_card_code}"
+    send_notification_email("新会员审核", f"{json.dumps(user_info_dict, indent=True)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意请点击以下链接：\n{link_agree}\n")
 
     return func.HttpResponse(
         f"激活申请发送成功，请等待审核。",
@@ -146,21 +144,13 @@ def handle_get_requests(req: func.HttpRequest):
             return membercard_user_info(req)
         except Exception as e:
             return func.HttpResponse(f"激活申请发送失败 {e}", status_code=400)
-    activate = int(req.params["activate"])
     user_card_code = str(req.params["code"])
-    card_id = str(req.params["card_id"])
-    if activate == 1:
-        user_doc = collection.find_one({"card_code": user_card_code})
-        msg = activate_user_card(user_doc)
-        return func.HttpResponse(
-            f"This HTTP triggered function executed successfully.\n{msg}",
-            status_code=200
-        )
-    else:
-        return func.HttpResponse(
-            f"This HTTP triggered function executed successfully.\n未激活任何用户。",
-            status_code=200
-        )
+    user_doc = collection.find_one({"card_code": user_card_code})
+    msg = activate_user_card(user_doc)
+    return func.HttpResponse(
+        f"This HTTP triggered function executed successfully.\n{msg}",
+        status_code=200
+    )
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
