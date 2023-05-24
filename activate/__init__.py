@@ -124,7 +124,7 @@ def membercard_user_info(req: func.HttpRequest):
         if values["name"] == "USER_FORM_INFO_FLAG_EMAIL":
             user_info_dict["email"] = values["value"]
     for values in user_info["custom_field_list"]:
-        if values["name"] == "WECHAT_ID":
+        if values["name"] == "wechatid":
             user_info_dict["wechat_id"] = values["value"]
     user_info_dict["submission_time"] = date.today().isoformat()
     
@@ -142,7 +142,10 @@ def membercard_user_info(req: func.HttpRequest):
 
 def handle_get_requests(req: func.HttpRequest):
     if "encrypt_code" in req.params:
-        return membercard_user_info(req)
+        try:
+            return membercard_user_info(req)
+        except Exception as e:
+            return func.HttpResponse(f"激活申请发送失败 {e}", status_code=400)
     activate = int(req.params["activate"])
     user_card_code = str(req.params["code"])
     card_id = str(req.params["card_id"])
