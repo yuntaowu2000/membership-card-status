@@ -11,7 +11,7 @@ def card_pass_handler(xml_tree):
     '''审核通过'''
     card_id = xml_tree.find(".//CardId").text.strip()
     content = f"{card_id} 审核通过，可以使用。"
-    send_notification_email("会员卡审核结果", content)
+    send_notification_email("会员卡审核结果", content, to=email_dev_data["to"],server=server_dev)
 
 def card_not_pass_handler(xml_tree):
     '''审核未通过'''
@@ -22,7 +22,7 @@ def card_not_pass_handler(xml_tree):
     else:
         xml_tree_str = etree.tostring(xml_tree, encoding="utf-8", method="xml")
         content = f"{card_id} 审核未通过，原因未知，{xml_tree_str}。"
-    send_notification_email("会员卡审核结果", content)
+    send_notification_email("会员卡审核结果", content, to=email_dev_data["to"], server=server_dev)
 
 def card_received_by_user(xml_tree):
     '''领取事件推送'''
@@ -46,7 +46,7 @@ def card_received_by_user(xml_tree):
         "open_id": from_username,
         "card_code": user_card_code,
         "card_active": False,
-        "received_time": time,
+        "received_date": time,
     }
     result = collection.update_one({"card_code": user_card_code}, {"$set": new_user_dict}, upsert=True)
     logging.info(f"New user card created, upserted document with _id {result.upserted_id}\n")
@@ -83,7 +83,7 @@ def membercard_user_info(xml_tree):
             "card_id": card_id,
             "open_id": open_id,
             "card_code": user_card_code,
-            "received_time": receive_time,
+            "received_date": receive_time,
             "nickname": res["nickname"],
             "card_status": res["user_card_status"],
             "card_active": False,
@@ -96,7 +96,7 @@ def membercard_user_info(xml_tree):
             if values["name"] == "USER_FORM_INFO_FLAG_EMAIL":
                 user_info_dict["email"] = values["value"]
         for values in user_info["custom_field_list"]:
-            if values["name"] == "WECHAT_ID":
+            if values["name"] == "wx_id":
                 user_info_dict["wechat_id"] = values["value"]
         
         result = collection.update_one({"card_code": user_card_code}, {"$set": user_info_dict}, upsert=True)
@@ -116,7 +116,7 @@ def card_sku_remind(xml_tree):
     # 报警详细信息
     detail = xml_tree.find(".//Detail").text.strip()
 
-    send_notification_email("会员卡库存警告", f"{card_id} 库存警告，{detail}")
+    send_notification_email("会员卡库存警告", f"{card_id} 库存警告，{detail}", to=email_dev_data["to"], server=server_dev)
 
 def post_request_router(event_type, xml_tree):
     if event_type == "card_pass_check":
@@ -142,7 +142,7 @@ def handle_post_requests(req: func.HttpRequest):
         post_request_router(event_type, tree)
     except Exception as e:
         logging.info(e)
-        send_notification_email("Error: Wechat API backend", f"An error occured while processing wechat request: {e}\n Request body: {body}")
+        send_notification_email("Error: Wechat API backend", f"An error occured while processing wechat request: {e}\n Request body: {body}", to=email_dev_data["to"], server=server_dev)
         return func.HttpResponse(
             "An error occured while processing wechat request",
             status_code=400
@@ -178,7 +178,7 @@ def handle_get_requests(req: func.HttpRequest):
             "timestamp": timestamp,
             "nonce": nonce,
             "echostr": echostr,
-        }, indent=True))
+        }, indent=True), to=email_dev_data["to"], server=server_dev)
         return func.HttpResponse(
             echostr,
             status_code=200
@@ -190,7 +190,7 @@ def handle_get_requests(req: func.HttpRequest):
             "timestamp": timestamp,
             "nonce": nonce,
             "echostr": echostr,
-        }, indent=True))
+        }, indent=True), to=email_dev_data["to"], server=server_dev)
         return func.HttpResponse(
             "",
             status_code=500

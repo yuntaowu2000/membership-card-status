@@ -44,7 +44,7 @@ def activate_user_card(user_doc):
         result = collection.update_one({"card_code": user_card_code}, {"$set": set_dict}, upsert=True)
         logging.info(f"User card status updated, upserted document with _id {result.upserted_id}\n")
         df_dict = generate_all_user_df(filter={})
-        send_notification_email("新用户激活成功", f"新用户卡号：{json.dumps(card_info_json, indent=True)}。csv文件包含全会员卡数据。", df_dict)
+        send_notification_email("新用户激活成功", f"新用户卡号：{json.dumps(card_info_json, indent=True, ensure_ascii=False)}。\ncsv文件包含全会员卡数据。如果csv文件打开存在乱码，在Excel中选择Data-From Text/CSV打开此文件，File Origin（文件格式）选择65001：Unicode(UTF-8)。", df_dict)
         msg = {"msg": f"Card {user_card_code} is activated."}
         reply_body = json.dumps({"err_code": 0, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
     return reply_body
@@ -123,15 +123,19 @@ def membercard_user_info(req: func.HttpRequest):
         if values["name"] == "USER_FORM_INFO_FLAG_EMAIL":
             user_info_dict["email"] = values["value"]
     for values in user_info["custom_field_list"]:
-        if values["name"] == "wechatid":
+        if values["name"] == "wx_id":
             user_info_dict["wechat_id"] = values["value"]
-    user_info_dict["submission_time"] = date.today().isoformat()
+        if values["name"] == "wx_name":
+            user_info_dict["wechat_nickname"] = values["value"]
+        if values["name"] == "program":
+            user_info_dict["program"] = values["value"]
+    user_info_dict["submission_date"] = date.today().isoformat()
     
     result = collection.update_one({"card_code": user_card_code}, {"$set": user_info_dict}, upsert=True)
     logging.info(f"User info submitted, upserted document with _id {result.upserted_id}\n")
 
     link_agree = f"{activate_api}?code={user_card_code}"
-    send_notification_email("新会员审核", f"{json.dumps(user_info_dict, indent=True)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意请点击以下链接：\n{link_agree}\n")
+    send_notification_email("新会员审核", f"{json.dumps(user_info_dict, indent=True, ensure_ascii=False)}\n请阅读以上内容，并决定是否同意激活该会员卡。\n同意请点击以下链接：\n{link_agree}\n")
 
     return func.HttpResponse(
         f"激活申请发送成功，请等待审核。",

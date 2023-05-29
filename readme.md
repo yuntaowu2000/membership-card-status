@@ -41,13 +41,15 @@
 
 ### 本地/Github upload配置
 
-App本地测试运行以及通过vscode上传至Azure时默认4个文件存在：
+App本地测试运行以及通过vscode上传至Azure时默认以下文件存在：
 - `.jsonfiles/email.json`
   - JSON dictionary 记录以下field：
   - `"server"`：email的SMTP服务器
   - `"user"`：发送邮件的邮箱，需要能通过server的验证
   - `"key"`：邮箱对应的密码，建议用没有2FA或OAUTH的SMTP提供商如purelymail
   - `"to"`：一个收件人的list（有哪些人需要接收到这里所有的相关信息）
+- `.jsonfiles/email_dev.json`
+  - 格式同`email.json`，本文件单独记录开发者的email，区分HR与开发者。如果文件不存在，则本地测试时默认与`email.json`相同，但GitHub Action必须要有两个不同的secret。
 - `.jsonfiles/database.json`
   - JSON dictionary 记录以下field：
   - `"cosmos_conn_str"`：Azure cosmos的链接，即为settings-connection strings中的PRIMARY CONNECTION STRING
@@ -62,8 +64,9 @@ App本地测试运行以及通过vscode上传至Azure时默认4个文件存在�
   - `wechat_api`：微信的api链接，"https://api.weixin.qq.com"
   - `activate_api`：Function App的activate endpoint的链接，e.g. "https://{func-app-name}.azurewebsites.net/api/activate"
 
-使用Github CI上传至Azure时默认5个Action secret存在：
+使用Github CI上传至Azure时默认以下Action secret存在：
 - `EMAIL_DATA`：`.jsonfiles/email.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
+- `EMAIL_DEV_DATA`：`.jsonfiles/email_dev.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
 - `DB_DATA`：`.jsonfiles/database.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
 - `WECHAT_DATA`：`.jsonfiles/wechat.json`的raw text形式，one line，所有`"`号需要用`\"` escape。
 - `BASE_URLS`：`.jsonfiles/base_urls.json`的raw text形式，one line，所有`"`号需要用`\"` escape。

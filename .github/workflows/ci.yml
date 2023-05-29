@@ -36,6 +36,8 @@ jobs:
         mkdir .jsonfiles
         touch .jsonfiles/email.json
         echo "${{secrets.EMAIL_DATA}}" >> .jsonfiles/email.json
+        touch .jsonfiles/email_dev.json
+        echo "${{secrets.EMAIL_DEV_DATA}}" >> .jsonfiles/email_dev.json
         touch .jsonfiles/database.json
         echo "${{secrets.DB_DATA}}" >> .jsonfiles/database.json
         touch .jsonfiles/wechat.json

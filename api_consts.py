@@ -1,4 +1,4 @@
-import logging, json
+import logging, json, os
 from smtplib import SMTP_SSL as SMTP
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -14,6 +14,19 @@ try:
 except:
     server = SMTP(email_data["server"], 465)
 server.login(email_data["user"], email_data["key"])
+
+dev_email_json = ".jsonfiles/email_dev.json"
+if not os.path.exists(dev_email_json):
+    dev_email_json = ".jsonfiles/email.json"
+    logging.info("dev email json doesn't exist, using previous email json instead")
+
+with open(dev_email_json, "r") as f:
+    email_dev_data = json.loads(f.read())
+try:
+    server_dev = SMTP(email_dev_data["server"], 587)
+except:
+    server_dev = SMTP(email_dev_data["server"], 465)
+server_dev.login(email_dev_data["user"], email_dev_data["key"])
 
 with open(".jsonfiles/database.json", "r") as f:
     db_data = json.loads(f.read())
@@ -32,14 +45,15 @@ with open(".jsonfiles/base_urls.json", "r") as f:
 wechat_api = base_urls["wechat_api"]
 activate_api = base_urls["activate_api"]
 
-def send_notification_email(subject, content, files: dict={}, to=None):
+def send_notification_email(subject, content, files: dict={}, to=None, server=server):
     msg = MIMEMultipart()
     msg["Subject"] = subject
     msg["From"] = email_data["user"]
-    msg.attach(MIMEText(content, "plain"))
+    msg.attach(MIMEText(content, "plain", "utf-8"))
 
     for f in files:
-        part = MIMEApplication(files[f], Name=f)
+        part = MIMEText(files[f], "base64", "utf-8")
+        part["Content-Type"] = "application/octet-stream"
         part["Content-Disposition"] = f"""attachment; filename="{f}" """
         msg.attach(part)
 
@@ -47,11 +61,16 @@ def send_notification_email(subject, content, files: dict={}, to=None):
     logging.info(f"Email sent: {content}")
 
 def generate_all_user_df(filter={}):
-    '''Get all user info from database, convert to csv'''
+    '''Get all user info from database, convert to xlsx for proper handling of special characters'''
     mongo_docs = collection.find(filter)
     df = pd.DataFrame(mongo_docs)
     # mongo's internal id is not needed
     df.pop("_id")
+    df = df[["name", "email", "wechat_id", "wechat_nickname", "program", 
+                  "card_id", "open_id", "card_code", "card_active",
+                  "received_date", "submission_date", "activate_date", "deactivate_date"]]
+    df = df.dropna(subset=["name"])
+    df = df.sort_values(by="name")
     out_fn = "membership_card.csv"
-    csv_content = df.to_csv(index=False)
-    return {out_fn: csv_content}
+    content = df.to_csv(index=False)
+    return {out_fn: content}
