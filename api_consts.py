@@ -72,5 +72,7 @@ def generate_all_user_df(filter={}):
     df = df.dropna(subset=["name"])
     df = df.sort_values(by="name")
     out_fn = "membership_card.csv"
-    content = df.to_csv(index=False)
-    return {out_fn: content}
+    
+    df_bytes = b"\xEF\xBB\xBF" # add header for Excel UTF-8 encoding
+    df_bytes += bytes(df.to_csv(encoding="utf-8", index=False), encoding="utf-8")
+    return {out_fn: df_bytes}
