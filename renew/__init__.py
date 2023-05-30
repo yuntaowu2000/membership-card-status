@@ -42,7 +42,7 @@ def renew_user_card(user_doc):
         result = collection.update_one({"card_code": card_code}, {"$set": set_dict}, upsert=True)
         logging.info(f"User card status updated, upserted document with _id {result.upserted_id}\n")
         df_dict = generate_all_user_df(filter={})
-        send_notification_email("用户续期成功", f"{card_code} 续期成功，更新后有效期至{new_deactivate_date.isoformat()}。\ncsv文件包含全会员卡数据。如果csv文件打开存在乱码，在Excel中选择Data-From Text/CSV打开此文件，File Origin（文件格式）选择65001：Unicode(UTF-8)。", df_dict)
+        send_notification_email("用户续期成功", f"{card_code} 续期成功，更新后有效期至{new_deactivate_date.isoformat()}。\ncsv文件打开可能存在乱码。日期乱码可以将数据格式从Date改为Short Date。中文乱码在Excel中选择Data-From Text/CSV打开此文件，File Origin（文件格式）选择65001：Unicode(UTF-8)。", df_dict)
         msg = {"msg": f"Card {card_code} is renewed. New deactivation date: {new_deactivate_date.isoformat()}."}
         reply_body = json.dumps({"err_code": 0, "data_list": [eval(json.dumps(msg, ensure_ascii=False, separators=(",",":")))]}, ensure_ascii=False, separators=(",",":"))
     return reply_body
