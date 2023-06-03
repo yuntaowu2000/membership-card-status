@@ -45,10 +45,10 @@ with open(".jsonfiles/base_urls.json", "r") as f:
 wechat_api = base_urls["wechat_api"]
 activate_api = base_urls["activate_api"]
 
-def send_notification_email(subject, content, files: dict={}, to=None, server=server):
+def send_notification_email(subject, content, files: dict={}, to=None, server=server, sender=email_data["user"]):
     msg = MIMEMultipart()
     msg["Subject"] = subject
-    msg["From"] = email_data["user"]
+    msg["From"] = sender
     msg.attach(MIMEText(content, "plain", "utf-8"))
 
     for f in files:
@@ -57,7 +57,7 @@ def send_notification_email(subject, content, files: dict={}, to=None, server=se
         part["Content-Disposition"] = f"""attachment; filename="{f}" """
         msg.attach(part)
 
-    server.sendmail(email_data["user"], email_data["to"] if to is None else to, msg.as_string())
+    server.sendmail(sender, email_data["to"] if to is None else to, msg.as_string())
     logging.info(f"Email sent: {content}")
 
 def generate_all_user_df(filter={}):
